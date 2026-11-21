@@ -206,7 +206,7 @@ The general execution order is:
 
 8\. Open `4\_powerbi/Banking\_Retention\_Dashboard.pbix` to explore the dashboard.
 
-![Power BI Dashboard Preview](powerbi/dashboard_preview.png)
+![Power BI Dashboard Preview](4_powerbi/dashboard_preview.png)
 
 
 
