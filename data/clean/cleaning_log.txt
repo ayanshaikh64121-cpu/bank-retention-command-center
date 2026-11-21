@@ -1,0 +1,13 @@
+"Raw customers rows: 10,080"
+"[1] Removed 80 duplicate rows -> 10,000 rows left"
+"[2] Standardised gender -> {'Male': 5413, 'Female': 4587}"
+[3] Cleaned city names -> 12 unique cities
+"[4] Fixed 12 impossible ages (0, -5, 150, 999) with the median age"
+[5] Filled 300 missing credit scores and 250 missing incomes (median by account type)
+"[6] Built behaviour features: txn trend, app logins, UPI share, complaints -> 26 columns"
+[7] Logistic Regression  ROC-AUC = 0.832
+[7] Random Forest        ROC-AUC = 0.833
+[8] Best model: Random Forest. Its probabilities are used for every customer.
+[9] Flagging the riskiest 20% catches 64% of all churners (precision 44%; base rate 13.8%)
+"[10] 3-year value at risk = Rs 6.56 crore | High-risk customers = 1,683 (17%)"
+[11] Top 20% of customers (by value at risk) hold 70% of all value at risk -> focus the budget there

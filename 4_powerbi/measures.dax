@@ -1,0 +1,139 @@
+// =====================================================================
+// STEP 4 (Power BI) - DAX measures. Copy ONE block at a time:
+// Modeling tab > New measure (or New column), paste, press Enter.
+// Table names assume you loaded the 3 MySQL views with their default names.
+// If you loaded CSVs, the names are the same (v_customer_360, v_monthly_activity, v_complaints).
+// Tip: create an empty table called "_Measures" (Home > Enter data) and keep every measure there.
+// =====================================================================
+
+
+// ------------------------------------------------------------------
+// A) CALENDAR TABLE (Modeling > New table)  - needed for the month charts
+// ------------------------------------------------------------------
+Calendar =
+ADDCOLUMNS (
+    CALENDAR ( DATE ( 2026, 1, 1 ), DATE ( 2026, 6, 30 ) ),
+    "Month Start", DATE ( YEAR ( [Date] ), MONTH ( [Date] ), 1 ),
+    "Month Name", FORMAT ( [Date], "MMM yyyy" ),
+    "Month No", MONTH ( [Date] )
+)
+// Then in Model view create relationships (many-to-one, single direction):
+//   v_monthly_activity[month]          -> Calendar[Date]
+//   v_complaints[complaint_date]       -> Calendar[Date]
+//   v_monthly_activity[customer_id]    -> v_customer_360[customer_id]
+//   v_complaints[customer_id]          -> v_customer_360[customer_id]
+// Sort 'Month Name' by 'Month No' (Column tools > Sort by column).
+
+
+// ------------------------------------------------------------------
+// B) CORE KPI MEASURES
+// ------------------------------------------------------------------
+Customers = DISTINCTCOUNT ( v_customer_360[customer_id] )
+
+Churned Customers = SUM ( v_customer_360[churned_next_90d] )
+
+Churn Rate % = DIVIDE ( [Churned Customers], [Customers] )
+
+Annual Revenue = SUM ( v_customer_360[est_annual_revenue] )
+
+Value at Risk (3Y) = SUM ( v_customer_360[revenue_at_risk] )
+
+Total 3Y Value = SUM ( v_customer_360[value_3yr] )
+
+Value at Risk % = DIVIDE ( [Value at Risk (3Y)], [Total 3Y Value] )
+
+Avg Churn Probability = AVERAGE ( v_customer_360[churn_probability] )
+
+High Risk Customers = CALCULATE ( [Customers], v_customer_360[risk_band] = "High" )
+
+Value at Risk (Crore) = DIVIDE ( [Value at Risk (3Y)], 10000000 )
+
+Churn Rate vs Bank Average =
+[Churn Rate %] - CALCULATE ( [Churn Rate %], ALL ( v_customer_360 ) )
+// Positive = this slice churns MORE than the bank average. Great for conditional-format colours.
+
+
+// ------------------------------------------------------------------
+// C) ENGAGEMENT + COMPLAINT MEASURES
+// ------------------------------------------------------------------
+Avg Txn per Customer = AVERAGE ( v_monthly_activity[txn_count] )
+
+Avg Txn - Churners =
+CALCULATE ( [Avg Txn per Customer], v_monthly_activity[churned_next_90d] = 1 )
+
+Avg Txn - Stayers =
+CALCULATE ( [Avg Txn per Customer], v_monthly_activity[churned_next_90d] = 0 )
+
+Complaints = COUNTROWS ( v_complaints )
+
+Unresolved Complaints % =
+DIVIDE ( CALCULATE ( [Complaints], v_complaints[is_resolved] = 0 ), [Complaints] )
+
+Avg Days to Resolve = AVERAGE ( v_complaints[days_to_resolve] )
+
+
+// ------------------------------------------------------------------
+// D) CAMPAIGN PLANNER (page 4). Step 1: create 2 What-if parameters
+//    Modeling > New parameter > Numeric range
+//      Name "Customers to Contact"  : min 0, max 3000, increment 50, default 1000
+//      Name "Save Rate Multiplier"  : min 0.5, max 1.5, increment 0.1, default 1  (1 = base assumptions)
+//    Power BI creates the tables + measures [Customers to Contact Value] and
+//    [Save Rate Multiplier Value] automatically.
+//    Step 2: add these CALCULATED COLUMNS to v_customer_360 (Modeling > New column):
+// ------------------------------------------------------------------
+Action Cost =
+SWITCH (
+    v_customer_360[recommended_action],
+    "RM Personal Call", 1500,
+    "Proactive Check-in", 600,
+    "Fee Waiver + Cashback Offer", 400,
+    "Targeted App Nudge", 50,
+    "Automated SMS / App Nudge", 10,
+    0
+)
+
+Base Save Rate =
+SWITCH (
+    v_customer_360[recommended_action],
+    "RM Personal Call", 0.35,
+    "Proactive Check-in", 0.20,
+    "Fee Waiver + Cashback Offer", 0.25,
+    "Targeted App Nudge", 0.08,
+    "Automated SMS / App Nudge", 0.05,
+    0
+)
+
+Expected Value Saved (Base) =
+v_customer_360[churn_probability] * v_customer_360[Base Save Rate] * v_customer_360[value_3yr]
+
+Net Benefit (Base) =
+v_customer_360[Expected Value Saved (Base)] - v_customer_360[Action Cost]
+
+ROI (Base) = DIVIDE ( v_customer_360[Net Benefit (Base)], v_customer_360[Action Cost] )
+
+// Step 3: the measures. The bank contacts the N customers with the best return per rupee.
+// (Each measure below repeats the same TOPN: 'take the N customers with the best ROI'.)
+
+Campaign Spend =
+SUMX (
+    TOPN (
+        [Customers to Contact Value],
+        FILTER ( ALL ( v_customer_360 ), v_customer_360[Action Cost] > 0 && v_customer_360[Net Benefit (Base)] > 0 ),
+        v_customer_360[ROI (Base)], DESC
+    ),
+    v_customer_360[Action Cost]
+)
+
+Campaign Value Saved =
+SUMX (
+    TOPN (
+        [Customers to Contact Value],
+        FILTER ( ALL ( v_customer_360 ), v_customer_360[Action Cost] > 0 && v_customer_360[Net Benefit (Base)] > 0 ),
+        v_customer_360[ROI (Base)], DESC
+    ),
+    v_customer_360[Expected Value Saved (Base)] * [Save Rate Multiplier Value]
+)
+
+Campaign Net Benefit = [Campaign Value Saved] - [Campaign Spend]
+
+Campaign ROI = DIVIDE ( [Campaign Net Benefit], [Campaign Spend] )
