@@ -206,6 +206,8 @@ The general execution order is:
 
 8\. Open `4\_powerbi/Banking\_Retention\_Dashboard.pbix` to explore the dashboard.
 
+![Power BI Dashboard Preview](powerbi/dashboard_preview.png)
+
 
 
 \*\*Note:\*\* `02\_load\_data.sql` is an alternative SQL-based loading method. The project data was loaded using the Python MySQL loader.
